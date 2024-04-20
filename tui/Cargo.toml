@@ -1,0 +1,12 @@
+[package]
+name = "brian"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1.37.0", features = ["rt", "sync", "macros"] }
+futures = "0.3.30"
+#---
+color-eyre = "0.6.3"
+crossterm = { version = "0.27.0", features = ["event-stream"] }
+ratatui = { version = "0.26.2", features = ["unstable-widget-ref"] }
