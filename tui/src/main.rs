@@ -1,4 +1,5 @@
 use color_eyre::Result;
+use tokio::task::LocalSet;
 
 use crate::app::App;
 
@@ -12,7 +13,10 @@ mod events;
 async fn main() -> Result<()> {
     errors::install_hooks()?;
     let mut terminal = tui::init()?;
-    App::new().run(&mut terminal).await?;
+
+    let local = LocalSet::new();
+    local.run_until(App::new().run(&mut terminal)).await?;
+
     tui::restore()?;
 
     Ok(())

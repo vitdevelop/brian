@@ -1,4 +1,4 @@
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::KeyCode;
 use ratatui::Frame;
 use ratatui::layout::Alignment;
 use ratatui::prelude::{Line, Stylize};
@@ -7,19 +7,44 @@ use ratatui::widgets::{Block, Borders};
 use ratatui::widgets::block::{Position, Title};
 use tokio::sync::mpsc::WeakUnboundedSender;
 
-use crate::screen::counter::Counter;
+use crate::events::Event;
+use crate::events::Event::RENDER;
+use crate::screen::base::Screen::Default;
+use crate::screen::counter::CounterScreen;
 
-use super::base::Screen;
+use super::base::{Screen, ScreenTrait};
 
 #[derive(Debug, Clone)]
 pub struct DefaultScreen {
-    screen_sender: WeakUnboundedSender<Box<dyn Screen>>,
+    event_sender: WeakUnboundedSender<Event>,
 }
 
-impl Screen for DefaultScreen {
-    fn new(screen_sender: WeakUnboundedSender<Box<dyn Screen>>,
-           _: Option<Box<dyn Screen>>) -> impl Screen {
-        DefaultScreen { screen_sender }
+impl DefaultScreen {
+    pub fn new(event_sender: WeakUnboundedSender<Event>,
+           _: Option<Screen>) -> Screen {
+        Screen::Default(DefaultScreen { event_sender })
+    }
+}
+
+impl ScreenTrait for DefaultScreen {
+    fn handle_event(&mut self, event: Event) -> color_eyre::Result<()> {
+        match event {
+            Event::KEY(key) => {
+                match key.code {
+                    KeyCode::Char('d') => {
+                        let current_screen = Box::new(Default(self.clone()));
+                        self.send_screen_render_event(CounterScreen::new(self.event_sender.clone(), Some(current_screen)))?
+                    }
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn get_previous_screen(&mut self) -> Option<Box<Screen>> {
+        None
     }
 
     fn render_widget(&self, frame: &mut Frame) {
@@ -41,29 +66,14 @@ impl Screen for DefaultScreen {
             .border_set(border::THICK);
         frame.render_widget(block, frame.size())
     }
-
-    fn handle_key_event(&mut self, key_event: KeyEvent) -> color_eyre::Result<()> {
-        match key_event.code {
-            KeyCode::Char('d') => {
-                let current_screen = Box::new(self.clone());
-                self.send_screen_render_event(Box::new(Counter::new(self.screen_sender.clone(), Some(current_screen))))?
-            }
-            _ => {}
-        }
-        Ok(())
-    }
-
-    fn get_previous_screen(&mut self) -> Option<Box<dyn Screen>> {
-        None
-    }
 }
 
 impl DefaultScreen {
-    fn send_screen_render_event(&self, screen: Box<impl Screen + 'static>) -> color_eyre::Result<()> {
-        match self.screen_sender.upgrade() {
+    fn send_screen_render_event(&self, screen: Screen) -> color_eyre::Result<()> {
+        match self.event_sender.upgrade() {
             None => {}
             Some(sender) => {
-                sender.send(screen)
+                sender.send(RENDER(Box::new(screen)))
                     .expect("unable to create counter screen");
             }
         }

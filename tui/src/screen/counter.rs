@@ -1,4 +1,4 @@
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::KeyCode;
 use ratatui::Frame;
 use ratatui::layout::Alignment;
 use ratatui::prelude::{Line, Stylize, Text};
@@ -6,42 +6,70 @@ use ratatui::symbols::border;
 use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::widgets::block::{Position, Title};
 use tokio::sync::mpsc::WeakUnboundedSender;
-use crate::screen::base::Screen;
 
-#[derive(Debug, Default, Clone)]
-pub struct Counter {
+use crate::events::Event;
+use crate::events::Event::STATE;
+use crate::screen::base::{Screen, ScreenTrait};
+
+#[derive(Debug, Clone)]
+struct State {
     counter: i64,
-    previous_screen: Option<Box<dyn Screen>>,
 }
 
-impl Counter {
+#[derive(Debug, Clone)]
+pub struct CounterScreen {
+    event_sender: WeakUnboundedSender<Event>,
+    previous_screen: Option<Box<Screen>>,
+    state: State,
+}
+
+impl CounterScreen {
+    pub fn new(event_sender: WeakUnboundedSender<Event>, previous_screen: Option<Box<Screen>>) -> Screen {
+        Screen::Counter(CounterScreen { event_sender, previous_screen, state: State { counter: 0 } })
+    }
+
     fn increment_counter(&mut self) -> color_eyre::Result<()> {
-        self.counter += 1;
+        self.state.counter += 1;
         Ok(())
     }
 
     fn decrement_counter(&mut self) -> color_eyre::Result<()> {
-        self.counter -= 1;
+        self.state.counter -= 1;
+        Ok(())
+    }
+
+    fn increment_async(&self) -> color_eyre::Result<()> {
+        let mut state = self.state.clone();
+        let event_sender = self.event_sender.clone();
+        tokio::task::spawn_local(async move {
+            state.counter += 2;
+            match event_sender.upgrade() {
+                None => {}
+                Some(sender) => { let _ = sender.send(STATE); }
+            }
+        });
         Ok(())
     }
 }
 
-impl Screen for Counter {
-    fn new(_: WeakUnboundedSender<Box<dyn Screen>>, previous_screen: Option<Box<dyn Screen>>) -> impl Screen {
-        Counter { counter: 0, previous_screen }
-    }
-
-    fn handle_key_event(&mut self, key_event: KeyEvent) -> color_eyre::Result<()> {
-        match key_event.code {
-            KeyCode::Left => { self.decrement_counter()? }
-            KeyCode::Right => { self.increment_counter()? }
+impl ScreenTrait for CounterScreen {
+    fn handle_event(&mut self, event: Event) -> color_eyre::Result<()> {
+        match event {
+            Event::KEY(key) => {
+                match key.code {
+                    KeyCode::Left => { self.decrement_counter()? }
+                    KeyCode::Right => { self.increment_counter()? }
+                    KeyCode::Char('a') => { self.increment_async()? }
+                    _ => {}
+                };
+            }
             _ => {}
         };
 
         Ok(())
     }
 
-    fn get_previous_screen(&mut self) -> Option<Box<dyn Screen>> {
+    fn get_previous_screen(&mut self) -> Option<Box<Screen>> {
         self.previous_screen.clone()
     }
 
@@ -52,6 +80,8 @@ impl Screen for Counter {
             " Decrement".into(),
             " <Right>".yellow().into(),
             " Increment".into(),
+            " <a>".yellow().into(),
+            " Async Increment".into(),
             " <q>".yellow().into(),
             " Quit".into(),
         ]));
@@ -66,7 +96,7 @@ impl Screen for Counter {
 
         let counter_text = Text::from(Line::from(vec![
             "Counter: ".bold(),
-            self.counter.to_string().yellow(),
+            self.state.counter.to_string().yellow(),
         ]));
 
         let paragraph = Paragraph::new(counter_text)

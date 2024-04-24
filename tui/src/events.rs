@@ -1,36 +1,39 @@
 use crossterm::event::{EventStream, KeyEvent, KeyEventKind};
-use futures::StreamExt;
 use futures::FutureExt;
+use futures::StreamExt;
 use tokio::select;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender, WeakUnboundedSender};
-use crate::events::Event::{KEY, PASS, RENDER};
 
+use crate::events::Event::{KEY, PASS};
 use crate::screen::base::Screen;
 
 #[derive(Debug)]
 pub struct Events {
-    screen_sender: UnboundedSender<Box<dyn Screen>>,
-    screen_receiver: UnboundedReceiver<Box<dyn Screen>>,
+    event_sender: UnboundedSender<Event>,
+    event_receiver: UnboundedReceiver<Event>,
+
     key_events: EventStream,
 }
 
 #[derive(Debug)]
 pub enum Event {
-    RENDER(Box<dyn Screen>),
+    RENDER(Box<Screen>),
     KEY(KeyEvent),
+    STATE,
     PASS,
 }
 
 impl Events {
     pub fn new() -> Events {
-        let (sender, receiver) = unbounded_channel::<Box<dyn Screen>>();
+        let (sender, receiver) =
+            unbounded_channel::<Event>();
         let event_stream = EventStream::new();
 
-        Events { screen_sender: sender, screen_receiver: receiver, key_events: event_stream }
+        Events { event_sender: sender, event_receiver: receiver, key_events: event_stream }
     }
 
-    pub fn get_screen_sender(&self) -> WeakUnboundedSender<Box<dyn Screen>> {
-        self.screen_sender.downgrade()
+    pub fn get_event_sender(&self) -> WeakUnboundedSender<Event> {
+        self.event_sender.downgrade()
     }
 
     pub async fn read(&mut self) -> color_eyre::Result<Event> {
@@ -50,10 +53,10 @@ impl Events {
                 }
             }
 
-            event = self.screen_receiver.recv() => {
+            event = self.event_receiver.recv() => {
                 match event {
                     None => Ok(PASS),
-                    Some(screen) => Ok(RENDER(screen)),
+                    Some(event) => Ok(event),
                 }
             }
         }

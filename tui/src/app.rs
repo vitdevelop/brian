@@ -1,14 +1,15 @@
 use color_eyre::eyre::WrapErr;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use crate::events::{Event, Events};
-use crate::screen::base::Screen;
+use crate::events::Event::{KEY, RENDER};
+use crate::events::Events;
+use crate::screen::base::{Screen, ScreenTrait};
 use crate::screen::default::DefaultScreen;
 use crate::tui;
 
 #[derive(Debug)]
 pub struct App {
-    screen: Box<dyn Screen>,
+    screen: Box<Screen>,
     events: Events,
     exit: bool,
 }
@@ -16,7 +17,7 @@ pub struct App {
 impl App {
     pub fn new() -> App {
         let events = Events::new();
-        App { screen: Box::new(DefaultScreen::new(events.get_screen_sender(), None)), events, exit: false }
+        App { screen: Box::new(DefaultScreen::new(events.get_event_sender().clone(), None)), events, exit: false }
     }
 
     pub async fn run(&mut self, terminal: &mut tui::Tui) -> color_eyre::Result<()> {
@@ -29,24 +30,26 @@ impl App {
     }
 
     async fn handle_events(&mut self) -> color_eyre::Result<()> {
-        let event = self.events.read().await?;
+        let event = {
+            self.events.read().await?
+        };
 
         match event {
-            Event::KEY(key_event) => {
-                self.handle_key_event(key_event)
+            KEY(key_event) => {
+                self.handle_key_event(key_event).await
                     .wrap_err_with(|| {
                         format!("handling key event failed:\n{key_event:#?}")
                     })
             }
-            Event::RENDER(screen) => {
+            RENDER(screen) => {
                 self.screen = screen;
                 Ok(())
             }
-            Event::PASS => { Ok(()) }
+            _ => { Ok(()) }
         }
     }
 
-    fn handle_key_event(&mut self, key_event: KeyEvent) -> color_eyre::Result<()> {
+    async fn handle_key_event(&mut self, key_event: KeyEvent) -> color_eyre::Result<()> {
         match key_event.code {
             // Exit application on `q` or `Q`
             KeyCode::Char('q') | KeyCode::Char('Q') => self.exit(),
@@ -59,7 +62,7 @@ impl App {
                 }
                 Ok(())
             }
-            _ => self.screen.handle_key_event(key_event)
+            _ => self.screen.handle_event(KEY(key_event))
         }
     }
 
@@ -67,13 +70,13 @@ impl App {
         match self.screen.get_previous_screen() {
             None => Ok(()),
             Some(previous_screen) => {
-                match self.events.get_screen_sender().upgrade() {
+                match self.events.get_event_sender().upgrade() {
                     None => {
                         // something goes wrong here
                         Ok(())
                     }
                     Some(sender) => {
-                        let _ = sender.send(previous_screen);
+                        let _ = sender.send(RENDER(previous_screen));
                         return Ok(());
                     }
                 }
