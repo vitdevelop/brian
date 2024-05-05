@@ -6,6 +6,7 @@ use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender, W
 
 use crate::events::Event::{KEY, PASS};
 use crate::screen::base::Screen;
+use crate::screen::counter;
 
 #[derive(Debug)]
 pub struct Events {
@@ -16,10 +17,15 @@ pub struct Events {
 }
 
 #[derive(Debug)]
+pub enum StateEvent {
+    Counter(counter::State),
+}
+
+#[derive(Debug)]
 pub enum Event {
     RENDER(Box<Screen>),
     KEY(KeyEvent),
-    STATE,
+    STATE(StateEvent),
     PASS,
 }
 

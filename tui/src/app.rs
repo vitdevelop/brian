@@ -4,7 +4,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use crate::events::Event::{KEY, RENDER};
 use crate::events::Events;
 use crate::screen::base::{Screen, ScreenTrait};
-use crate::screen::default::DefaultScreen;
+use crate::screen::main::MainScreen;
 use crate::tui;
 
 #[derive(Debug)]
@@ -17,7 +17,7 @@ pub struct App {
 impl App {
     pub fn new() -> App {
         let events = Events::new();
-        App { screen: Box::new(DefaultScreen::new(events.get_event_sender().clone(), None)), events, exit: false }
+        App { screen: Box::new(MainScreen::new(events.get_event_sender().clone(), None)), events, exit: false }
     }
 
     pub async fn run(&mut self, terminal: &mut tui::Tui) -> color_eyre::Result<()> {
@@ -45,7 +45,7 @@ impl App {
                 self.screen = screen;
                 Ok(())
             }
-            _ => { Ok(()) }
+            _ => { self.screen.handle_event(event).await }
         }
     }
 
@@ -62,7 +62,7 @@ impl App {
                 }
                 Ok(())
             }
-            _ => self.screen.handle_event(KEY(key_event))
+            _ => self.screen.handle_event(KEY(key_event)).await
         }
     }
 

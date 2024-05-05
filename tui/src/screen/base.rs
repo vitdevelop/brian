@@ -5,18 +5,18 @@ use ratatui::Frame;
 
 use crate::events::Event;
 use crate::screen::counter::CounterScreen;
-use crate::screen::default::DefaultScreen;
+use crate::screen::main::MainScreen;
 
 #[derive(Debug, Clone)]
 #[enum_dispatch(ScreenTrait)]
 pub enum Screen {
-    Default(DefaultScreen),
+    Main(MainScreen),
     Counter(CounterScreen),
 }
 
 #[enum_dispatch]
 pub trait ScreenTrait {
-    fn handle_event(&mut self, _: Event) -> color_eyre::Result<()> {
+    async fn handle_event(&mut self, _: Event) -> color_eyre::Result<()> {
         Ok(())
     }
 

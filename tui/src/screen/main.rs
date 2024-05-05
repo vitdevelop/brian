@@ -1,3 +1,4 @@
+use std::default::Default;
 use crossterm::event::KeyCode;
 use ratatui::Frame;
 use ratatui::layout::Alignment;
@@ -9,30 +10,30 @@ use tokio::sync::mpsc::WeakUnboundedSender;
 
 use crate::events::Event;
 use crate::events::Event::RENDER;
-use crate::screen::base::Screen::Default;
+use crate::screen::base::Screen::Main;
 use crate::screen::counter::CounterScreen;
 
 use super::base::{Screen, ScreenTrait};
 
 #[derive(Debug, Clone)]
-pub struct DefaultScreen {
+pub struct MainScreen {
     event_sender: WeakUnboundedSender<Event>,
 }
 
-impl DefaultScreen {
+impl MainScreen {
     pub fn new(event_sender: WeakUnboundedSender<Event>,
            _: Option<Screen>) -> Screen {
-        Screen::Default(DefaultScreen { event_sender })
+        Main(MainScreen { event_sender })
     }
 }
 
-impl ScreenTrait for DefaultScreen {
-    fn handle_event(&mut self, event: Event) -> color_eyre::Result<()> {
+impl ScreenTrait for MainScreen {
+    async fn handle_event(&mut self, event: Event) -> color_eyre::Result<()> {
         match event {
             Event::KEY(key) => {
                 match key.code {
                     KeyCode::Char('d') => {
-                        let current_screen = Box::new(Default(self.clone()));
+                        let current_screen = Box::new(Main(self.clone()));
                         self.send_screen_render_event(CounterScreen::new(self.event_sender.clone(), Some(current_screen)))?
                     }
                     _ => {}
@@ -68,7 +69,7 @@ impl ScreenTrait for DefaultScreen {
     }
 }
 
-impl DefaultScreen {
+impl MainScreen {
     fn send_screen_render_event(&self, screen: Screen) -> color_eyre::Result<()> {
         match self.event_sender.upgrade() {
             None => {}

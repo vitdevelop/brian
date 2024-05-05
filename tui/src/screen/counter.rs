@@ -9,10 +9,11 @@ use tokio::sync::mpsc::WeakUnboundedSender;
 
 use crate::events::Event;
 use crate::events::Event::STATE;
+use crate::events::StateEvent::Counter;
 use crate::screen::base::{Screen, ScreenTrait};
 
 #[derive(Debug, Clone)]
-struct State {
+pub struct State {
     counter: i64,
 }
 
@@ -25,16 +26,28 @@ pub struct CounterScreen {
 
 impl CounterScreen {
     pub fn new(event_sender: WeakUnboundedSender<Event>, previous_screen: Option<Box<Screen>>) -> Screen {
-        Screen::Counter(CounterScreen { event_sender, previous_screen, state: State { counter: 0 } })
+        let state = State { counter: 0 };
+        Screen::Counter(CounterScreen { event_sender, previous_screen, state })
     }
 
-    fn increment_counter(&mut self) -> color_eyre::Result<()> {
-        self.state.counter += 1;
+    async fn increment_counter(&self) -> color_eyre::Result<()> {
+        let mut state = self.state.clone();
+        state.counter += 1;
+        match self.event_sender.upgrade() {
+            None => {}
+            Some(sender) => { let _ = sender.send(STATE(Counter(state))); }
+        }
         Ok(())
     }
 
-    fn decrement_counter(&mut self) -> color_eyre::Result<()> {
-        self.state.counter -= 1;
+    async fn decrement_counter(&self) -> color_eyre::Result<()> {
+        let mut state = self.state.clone();
+        state.counter -= 1;
+
+        match self.event_sender.upgrade() {
+            None => {}
+            Some(sender) => { let _ = sender.send(STATE(Counter(state))); }
+        }
         Ok(())
     }
 
@@ -45,7 +58,7 @@ impl CounterScreen {
             state.counter += 2;
             match event_sender.upgrade() {
                 None => {}
-                Some(sender) => { let _ = sender.send(STATE); }
+                Some(sender) => { let _ = sender.send(STATE(Counter(state))); }
             }
         });
         Ok(())
@@ -53,15 +66,18 @@ impl CounterScreen {
 }
 
 impl ScreenTrait for CounterScreen {
-    fn handle_event(&mut self, event: Event) -> color_eyre::Result<()> {
+    async fn handle_event(&mut self, event: Event) -> color_eyre::Result<()> {
         match event {
             Event::KEY(key) => {
                 match key.code {
-                    KeyCode::Left => { self.decrement_counter()? }
-                    KeyCode::Right => { self.increment_counter()? }
+                    KeyCode::Left => { self.decrement_counter().await? }
+                    KeyCode::Right => { self.increment_counter().await? }
                     KeyCode::Char('a') => { self.increment_async()? }
                     _ => {}
                 };
+            }
+            STATE(Counter(state)) => {
+                self.state = state
             }
             _ => {}
         };
