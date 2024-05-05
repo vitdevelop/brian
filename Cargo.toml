@@ -1,0 +1,7 @@
+[workspace]
+
+members = [
+    "cmd",
+    "tui"
+]
+resolver = "2"
