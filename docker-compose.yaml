@@ -1,16 +1,25 @@
 services:
   sender:
     image: alpine
-    command: "ash -c 'for i in $(seq 1 5); do wget -q -S -O - http://echo:8888 2>&1; done'"
-    depends_on:
-      echo:
-        condition: service_healthy
+    command: "ash -c 'sleep 7; for i in $(seq 1 5); do wget -q -S -O - http://echo:8888 2>&1; done'"
   echo:
     image: alpine
-    command: "nc -lk -p 8888 -e /bin/echo -ne 'HTTP/1.1 200 OK\n\nSuccessful response\n\n'"
-    healthcheck:
-      test: wget --no-verbose --tries=1 --spider http://localhost:8888 || exit 1
-      interval: 1s
-      retries: 5
-      start_period: 1s
-      timeout: 5s
+    cap_add:
+      - NET_ADMIN
+    ports:
+      - 8888:8888
+    command: "nc -p 8888 -s 0.0.0.0 -v -lk -e /bin/echo -ne 'HTTP/1.1 200 OK\n\nSuccessful response\n\n'"
+  listener:
+    command: ash -c "
+          ./brian
+          "
+#           ash config/config-iptables.sh
+#           && clean_rules
+    volumes:
+      - ./docker_debug/:/config
+    build:
+      context: .
+      dockerfile: cmd/DevDockerfile
+    network_mode: "service:echo"
+    cap_add:
+      - NET_ADMIN

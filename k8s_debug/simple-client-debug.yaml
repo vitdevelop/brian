@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: client-debug
+  labels:
+    app: debug
+spec:
+  containers:
+  - name: busybox
+    image: alpine
+    command: ["/bin/sh","-ec"]
+    args: ["apk --update add curl && sleep 1d"]

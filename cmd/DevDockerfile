@@ -1,0 +1,5 @@
+FROM alpine
+MAINTAINER Vitalie Balanici
+
+COPY target/x86_64-unknown-linux-musl/debug/brian /brian
+RUN chmod +x /brian

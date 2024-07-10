@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: echo-debug
+  labels:
+    app: debug
+    type: echo
+spec:
+  containers:
+  - name: busybox
+    image: alpine
+    ports:
+    - containerPort: 80
+    command: ["/bin/sh","-ec"]
+    args: ["apk --update add socat && socat -v tcp-l:80,fork exec:'/bin/cat'"]
+#     securityContext:
+      # capabilities:
+        # add: ["NET_ADMIN"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: echo-debug
+  labels:
+    app: debug
+    type: echo
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+  selector:
+    app: debug
+    type: echo
